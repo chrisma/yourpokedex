@@ -21,6 +21,19 @@ PICTURE_PATH_TEMPLATE = 'pokemon-sugimori/{id}.png'
 TWITTER_STATUS_URL_TEMPLATE = 'https://twitter.com/{screen_name}/status/{id}'
 TWITTER_ACCOUNT_NAME = 'yourpokedex'
 
+def verify_credentials(account):
+	# https://dev.twitter.com/rest/reference/get/account/verify_credentials
+	info = account.verify_credentials(include_entities=False, skip_status=True, include_email=False)
+	name = info.get('name', None)
+	if name is None:
+		logging.error('Could not verify credentials')
+	else:
+		logging.info('Logged in as @{name}, tweets: {tweets}, followers: {followers}'.format(
+			name = name.encode('utf-8'),
+			tweets = info['statuses_count'],
+			followers = info['followers_count']))
+	return info
+
 def fetch_from_pokedex(pokedex, name):
 	return next((p for p in pokedex if name in p['names'].values()), None)
 
@@ -43,24 +56,40 @@ def find_tweet(pokedex, language_to_search, account):
 			if status['favorited']:
 				continue
 			# Shouldn't be a retweet
-			is_retweet = status.get('retweeted_status') is not None
-			if is_retweet:
+			if status.get('retweeted_status') is not None:
 				continue
-			# Should be in supported language
-			# lang can be 'und' if unknown
+			# Should be in supported language, can be 'und' if unknown
 			if status['lang'] not in LANGUAGES:
 				continue
-			# Should not quote a tweet
-			is_quote = status.get('quoted_status_id', False)
-			if is_quote:
+			# Should not be a quote of another tweet
+			if status.get('quoted_status_id', False):
+				continue
+			# Should not have been retweeted yet
+			if int(status['retweet_count']) > 0:
+				continue
+			# Should not have too many favorites yet
+			if int(status['favorite_count']) > 1:
+				continue
+			# Should not include possibly sensitive URLs
+			if status.get('possibly_sensitive'):
 				continue
 			# Should be able to identify which pokemon was mentioned
 			text = status['text'].lower().encode('utf-8')
-			found_pokemon = ''
+			found = None
 			for name in search_space:
 				if text.rfind(name.lower()) > -1:
-					return (status, fetch_from_pokedex(pokedex, name))
-			# Should not be part of a username
+					found = name
+			if found is None:
+				continue
+			# Identified pokemon should not be part of user's name
+			if status['user']['screen_name'].lower().find(found.lower()) > -1:
+				continue
+			# Identified pokemon should not be part of a mentioned user's name
+			mentions = status['entities'].get('user_mentions')
+			for m in mentions:
+				if found.lower() in m['screen_name'].lower():
+					continue
+			return (status, fetch_from_pokedex(pokedex, found))
 	return None, None
 
 def construct_tweet_text(screen_name, pokemon, language):
@@ -136,12 +165,6 @@ if __name__ == '__main__':
 	
 	logging.debug('Started!')
 	account = Twython(APP_KEY, APP_SECRET, OAUTH_TOKEN, OAUTH_TOKEN_SECRET)
-	# https://dev.twitter.com/rest/reference/get/account/verify_credentials
-	# info = account.verify_credentials(include_entities=False, skip_status=True, include_email=False)
-	# logging.info('Logged in as @{name}, tweets: {tweets}, followers: {followers}'.format(
-	# 	name = info['name'].encode('utf-8'),
-	# 	tweets = info['statuses_count'],
-	# 	followers = info['followers_count']))
 
 	poke_tweet, pokemon = find_tweet(pokedex, 'en', account)
 	if poke_tweet is None:
@@ -175,10 +198,3 @@ if __name__ == '__main__':
 	# Tweets that are favorited are not replied to again
 	account.create_favorite(id=reply_id)
 	logging.debug('Favorited tweet {}'.format(reply_id))
-
-	
-	# logging.info('Liking tweet that was replied to.')
-	# like foundtweet
-	# account.create_favorite(id=tweet['id'])
-
-	# import pdb; pdb.set_trace()
