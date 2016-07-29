@@ -36,56 +36,61 @@ def verify_credentials(account):
 def fetch_from_pokedex(pokedex, name):
 	return next((p for p in pokedex if name in p['names'].values()), None)
 
-def find_tweet(query, account):
+def _should_respond(tweet):
+	# https://dev.twitter.com/overview/api/tweets
+	# Shouldn't have interacted with tweet previously
+	if tweet['favorited']:
+		return False
+	# Shouldn't be a retweet
+	if tweet.get('retweeted_status') is not None:
+		return False
+	# Should be in supported language, can be 'und' if unknown
+	if tweet['lang'] not in LANGUAGES:
+		return False
+	# Should not be a quote of another tweet
+	if tweet.get('quoted_status_id', False):
+		return False
+	# Should not have been retweeted yet
+	if int(tweet['retweet_count']) > 0:
+		return False
+	# Should not have too many favorites yet
+	if int(tweet['favorite_count']) > 1:
+		return False
+	# Should not include possibly sensitive URLs
+	if tweet.get('possibly_sensitive'):
+		return False
+	return True
+
+def find_tweet(account, query_list_OR):
 	counter = 0
-	while counter <= len(query):
-		search_space = query[counter:counter+STEP]
-		logging.debug("Searching for '{}'".format(', '.join(search_space)))
-		statuses = account.search(q=' OR '.join(search_space), count=50)['statuses']
+	while counter <= len(query_list_OR):
+		current_query = query_list_OR[counter:counter+STEP]
+		logging.debug("Searching for '{}'".format(', '.join(current_query)))
+		statuses = account.search(q=' OR '.join(current_query), count=50)['statuses']
 		rate_limit = account.get_lastfunction_header('x-rate-limit-remaining')
 		logging.info('Rate limit remaining: {}'.format(rate_limit))
 		logging.info("Found {} matching tweets".format(len(statuses)))
 		counter += STEP
 		for status in statuses:
-			# https://dev.twitter.com/overview/api/tweets
-			# Shouldn't have interacted with tweet previously
-			if status['favorited']:
-				continue
-			# Shouldn't be a retweet
-			if status.get('retweeted_status') is not None:
-				continue
-			# Should be in supported language, can be 'und' if unknown
-			if status['lang'] not in LANGUAGES:
-				continue
-			# Should not be a quote of another tweet
-			if status.get('quoted_status_id', False):
-				continue
-			# Should not have been retweeted yet
-			if int(status['retweet_count']) > 0:
-				continue
-			# Should not have too many favorites yet
-			if int(status['favorite_count']) > 1:
-				continue
-			# Should not include possibly sensitive URLs
-			if status.get('possibly_sensitive'):
-				continue
-			# Should be able to identify which pokemon was mentioned
+			# Should be able to identify which part of the query list was mentioned
 			text = status['text'].lower().encode('utf-8')
 			found = None
-			for name in search_space:
-				if text.rfind(name.lower()) > -1:
-					found = name
+			for query_item in current_query:
+				if text.rfind(query_item.lower()) > -1:
+					found = query_item
 			if found is None:
 				continue
-			# Identified pokemon should not be part of user's name
+			# Identified query part should not be part of user's name
 			if status['user']['screen_name'].lower().find(found.lower()) > -1:
 				continue
-			# Identified pokemon should not be part of a mentioned user's name
+			# Identified query part should not be part of a mentioned user's name
 			mentions = status['entities'].get('user_mentions')
 			for m in mentions:
 				if found.lower() in m['screen_name'].lower():
 					continue
-			return (status, fetch_from_pokedex(pokedex, found))
+			if not _should_respond(status):
+				continue
+			return (status, found)
 	return None, None
 
 def construct_tweet_text(screen_name, pokemon, language):
@@ -142,13 +147,13 @@ def upload_twitter_picture(account, picture_path):
 	response = account.upload_media(media=photo)
 	return response['media_id']
 
-def reply_media_tweet(status, account, media_path, reply_id):
+def reply_media_tweet(account, status, reply_id, media_path):
 	media_id = upload_twitter_picture(account, media_path)
 	tweet = account.update_status(status=status, media_ids=[media_id], in_reply_to_status_id=reply_id)
 	logging.debug('Responded with media to {}'.format(reply_id))
 	return tweet
 
-def reply_text_tweet(status, account, reply_id):
+def reply_text_tweet(account, status, reply_id):
 	tweet = account.update_status(status=status, in_reply_to_status_id=reply_id)
 	logging.debug('Responded with text to {}'.format(reply_id))
 	return tweet
@@ -165,7 +170,7 @@ if __name__ == '__main__':
 	random.shuffle(pokedex)
 	poke_names = [p['names']['en'].encode('utf-8') for p in pokedex]
 
-	poke_tweet, pokemon = find_tweet(poke_names, account)
+	poke_tweet, pokemon_name = find_tweet(account, poke_names)
 	if poke_tweet is None:
 		logging.warn('No pokemon tweets found :(')
 		sys.exit()
@@ -173,12 +178,13 @@ if __name__ == '__main__':
 	tweet_lang = poke_tweet['lang']
 	screen_name = poke_tweet['user']['screen_name']
 	reply_id = poke_tweet['id']
-
 	logging.info(TWITTER_STATUS_URL_TEMPLATE.format(screen_name=screen_name, id=reply_id))
+
 	logging.info('user: @{user}, lang: {lang}, mentioned: {poke}'.format(
-		user=screen_name, lang=tweet_lang, poke=pokemon['names']['en']))
+		user=screen_name, lang=tweet_lang, poke=pokemon_name))
 	logging.debug("text: '{}'".format(poke_tweet['text'].encode('utf-8')))
 
+	pokemon = fetch_from_pokedex(pokedex, pokemon_name)
 	status, is_media_tweet = construct_tweet_text(screen_name, pokemon, tweet_lang)
 	logging.info(status)
 
@@ -188,10 +194,9 @@ if __name__ == '__main__':
 
 	if is_media_tweet:
 		picture_path = PICTURE_PATH_TEMPLATE.format(id=pokemon['id'])
-		tweet = reply_media_tweet(status, account, picture_path, reply_id)
+		tweet = reply_media_tweet(account, status, reply_id, picture_path)
 	else:
-		tweet = reply_text_tweet(status, account, reply_id)
-	logging.info('Posted tweet {}'.format(tweet['id']))
+		tweet = reply_text_tweet(account, status, reply_id)
 	logging.info(TWITTER_STATUS_URL_TEMPLATE.format(screen_name=TWITTER_ACCOUNT_NAME, id=tweet['id']))
 	
 	# Tweets that are favorited are not replied to again
