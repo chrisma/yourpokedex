@@ -14,7 +14,6 @@ import sys
 TWEET_LENGTH = 140
 LENGTH_MEDIA_URL = 24
 MEDIA_TWEET_LENGTH = TWEET_LENGTH - LENGTH_MEDIA_URL
-AMOUNT_FIRST_GEN = 151
 STEP = 15
 LANGUAGES = ['de','en','es','fr','it','ja','ko','zh']
 PICTURE_PATH_TEMPLATE = 'pokemon-sugimori/{id}.png'
@@ -37,13 +36,10 @@ def verify_credentials(account):
 def fetch_from_pokedex(pokedex, name):
 	return next((p for p in pokedex if name in p['names'].values()), None)
 
-def find_tweet(pokedex, language_to_search, account):
-	random.shuffle(pokedex)
-	poke_names = [p['names'][language_to_search].encode('utf-8') for p in pokedex]
-
+def find_tweet(query, account):
 	counter = 0
-	while counter <= AMOUNT_FIRST_GEN:
-		search_space = poke_names[counter:counter+STEP]
+	while counter <= len(query):
+		search_space = query[counter:counter+STEP]
 		logging.debug("Searching for '{}'".format(', '.join(search_space)))
 		statuses = account.search(q=' OR '.join(search_space), count=50)['statuses']
 		rate_limit = account.get_lastfunction_header('x-rate-limit-remaining')
@@ -166,7 +162,10 @@ if __name__ == '__main__':
 	logging.debug('Started!')
 	account = Twython(APP_KEY, APP_SECRET, OAUTH_TOKEN, OAUTH_TOKEN_SECRET)
 
-	poke_tweet, pokemon = find_tweet(pokedex, 'en', account)
+	random.shuffle(pokedex)
+	poke_names = [p['names']['en'].encode('utf-8') for p in pokedex]
+
+	poke_tweet, pokemon = find_tweet(poke_names, account)
 	if poke_tweet is None:
 		logging.warn('No pokemon tweets found :(')
 		sys.exit()
