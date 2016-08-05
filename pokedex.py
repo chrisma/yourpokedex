@@ -69,7 +69,7 @@ def find_tweet(account, query_list_OR):
 		statuses = account.search(q=' OR '.join(current_query), count=50)['statuses']
 		rate_limit = account.get_lastfunction_header('x-rate-limit-remaining')
 		logging.info('Rate limit remaining: {}'.format(rate_limit))
-		logging.info("Found {} matching tweets".format(len(statuses)))
+		logging.debug("Found {} matching tweets".format(len(statuses)))
 		counter += STEP
 		for status in statuses:
 			# Should be able to identify which part of the query list was mentioned
@@ -93,24 +93,36 @@ def find_tweet(account, query_list_OR):
 			return (status, found)
 	return None, None
 
-def construct_tweet_text(screen_name, pokemon, language):
-	# Return different options of text shortening
-	def create_text_options(text):
-		sentences = text.split('. ')
-		options = []
-		for i in range(len(sentences), 0, -1):
-			for subset in itertools.combinations(sentences, i):
-				options.append(subset)
-		return options
+# Return a list of sentence combinations
+# create_sentence_combinations('First. Second. Third.') == [
+#	('First', 'Second', 'Third.'),
+#	('First', 'Second'),
+#	('First', 'Third.'),
+#	('Second', 'Third.'),
+#	('First',),
+#	('Second',),
+#	('Third.',)
+# ]
+def create_sentence_combinations(text):
+	sentences = text.split('. ')
+	options = []
+	for i in range(len(sentences), 0, -1):
+		for subset in itertools.combinations(sentences, i):
+			options.append(subset)
+	return options
 
-	def create_fitting_text(prefix, text, length):
-		for option in create_text_options(text):
-			fitted = prefix + '. '.join(option)
-			fitted = fitted + '.' if not fitted.endswith('.') else fitted
-			if len(fitted) <= length:
-				logging.debug('Managed to fit {} / {} sentences: {} / {} chars'.format(
-					len(option), len(text.split('. ')), len(fitted), length))
-				return fitted
+def construct_tweet_text(screen_name, pokemon, language):
+	def create_fitting_text(prefix, optional_prefix, sep, text, length):
+		for combination in create_sentence_combinations(text):
+			# First try to fit the optional_prefix, then try without
+			for opt in [optional_prefix, '']:
+				fitted = prefix + optional_prefix + sep + '. '.join(combination)
+				fitted = fitted + '.' if not fitted.endswith('.') else fitted
+				if len(fitted) <= length:
+					logging.debug("Including '{}'".format(optional_prefix.encode('utf-8')))
+					logging.info('Managed to fit {} / {} sentences: {} / {} chars'.format(
+						len(combination), len(text.split('. ')), len(fitted), length))
+					return fitted
 		# No sentence could be fitted
 		return None
 
@@ -118,27 +130,21 @@ def construct_tweet_text(screen_name, pokemon, language):
 	logging.debug("Constructing tweet '{}' in '{}'".format(name, language))
 	name = bold(name)
 	genus = ', ' + italic(pokemon['genus'][language])
+	screen_name = '@' + screen_name if not screen_name.startswith('@') else screen_name
+	beginning = screen_name + ' ' + name
 	sep = ': '
+
 	flavor_texts = pokemon['flavor_texts'][language]
 	flavor_text = random.choice(flavor_texts)['text']
 	logging.debug('Chose one flavor text from {}'.format(len(flavor_texts)))
 
-	screen_name = '@' + screen_name if not screen_name.startswith('@') else screen_name
-	screen_name += ' '
-
-	status = screen_name + name + genus + sep + flavor_text
-	if len(status) <= MEDIA_TWEET_LENGTH:
-		logging.debug('Can include genus: {} / {} chars'.format(len(status), MEDIA_TWEET_LENGTH))
-		return (status, True)
-
-	logging.debug('Cannot include genus: {} / {} chars'.format(len(status), MEDIA_TWEET_LENGTH))
-	fitted_status = create_fitting_text(screen_name + name + sep, flavor_text, MEDIA_TWEET_LENGTH)
+	fitted_status = create_fitting_text(beginning, genus, sep, flavor_text, MEDIA_TWEET_LENGTH)
 	if fitted_status is not None:
 		logging.debug('Can use media tweet')
 		return (fitted_status, True)
 	else:
-		logging.info('Cannot fit any sentence into media tweet. Dropping media.')
-		fitted_status = create_fitting_text(screen_name + name + sep, flavor_text, TWEET_LENGTH)
+		logging.debug('Cannot fit any sentence into media tweet. Dropping media.')
+		fitted_status = create_fitting_text(beginning, genus, sep, flavor_text, TWEET_LENGTH)
 		return (fitted_status, False)
 
 def upload_twitter_picture(account, picture_path):
@@ -150,12 +156,12 @@ def upload_twitter_picture(account, picture_path):
 def reply_media_tweet(account, status, reply_id, media_path):
 	media_id = upload_twitter_picture(account, media_path)
 	tweet = account.update_status(status=status, media_ids=[media_id], in_reply_to_status_id=reply_id)
-	logging.debug('Responded with media to {}'.format(reply_id))
+	logging.info('Responded with media to {}'.format(reply_id))
 	return tweet
 
 def reply_text_tweet(account, status, reply_id):
 	tweet = account.update_status(status=status, in_reply_to_status_id=reply_id)
-	logging.debug('Responded with text to {}'.format(reply_id))
+	logging.info('Responded with text to {}'.format(reply_id))
 	return tweet
 
 if __name__ == '__main__':
