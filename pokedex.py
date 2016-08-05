@@ -33,6 +33,62 @@ def verify_credentials(account):
 			followers = info['followers_count']))
 	return info
 
+def upload_twitter_picture(account, picture_path):
+	photo = open(picture_path, 'rb')
+	logging.debug("Uploading '{}'".format(picture_path))
+	response = account.upload_media(media=photo)
+	return response['media_id']
+
+def reply_media_tweet(account, status, reply_id, media_path):
+	media_id = upload_twitter_picture(account, media_path)
+	tweet = account.update_status(status=status, media_ids=[media_id], in_reply_to_status_id=reply_id)
+	logging.info('Responded with media to {}'.format(reply_id))
+	return tweet
+
+def reply_text_tweet(account, status, reply_id):
+	tweet = account.update_status(status=status, in_reply_to_status_id=reply_id)
+	logging.info('Responded with text to {}'.format(reply_id))
+	return tweet
+
+# Return a list of sentence combinations
+# create_sentence_combinations('First. Second. Third.') == [
+#	('First', 'Second', 'Third.'),
+#	('First', 'Second'),
+#	('First', 'Third.'),
+#	('Second', 'Third.'),
+#	('First',),
+#	('Second',),
+#	('Third.',)
+# ]
+def create_sentence_combinations(text):
+	sentences = text.split('. ')
+	options = []
+	for i in range(len(sentences), 0, -1):
+		for subset in itertools.combinations(sentences, i):
+			options.append(subset)
+	return options
+
+# Attempt to fill format_str with sentences from text
+# (in the order returned by create_sentence_combinations)
+# to produce a result shorter or equal to length.
+# For every sentence combination, it is attempted to fit optional as well.
+# format_str must have placeholders {optionl} and {text}.
+# Makes sure the result has a full stop at the end
+# Returns None if no sentences could be fitted
+def fit_sentences(format_str, optional, text, length):
+	for combination in create_sentence_combinations(text):
+		# First try to fit optional, then try without
+		for opt in [optional, '']:
+			fitted = format_str.format(optional=opt, text='. '.join(combination))
+			fitted = fitted + '.' if not fitted.endswith('.') else fitted
+			if len(fitted) <= length:
+				logging.debug("Including '{}'".format(opt.encode('utf-8')))
+				logging.info('Managed to fit {} / {} sentences: {} / {} chars'.format(
+					len(combination), len(text.split('. ')), len(fitted), length))
+				return fitted
+	# No sentence could be fitted
+	return None
+
 def fetch_from_pokedex(pokedex, name):
 	return next((p for p in pokedex if name in p['names'].values()), None)
 
@@ -93,76 +149,27 @@ def find_tweet(account, query_list_OR):
 			return (status, found)
 	return None, None
 
-# Return a list of sentence combinations
-# create_sentence_combinations('First. Second. Third.') == [
-#	('First', 'Second', 'Third.'),
-#	('First', 'Second'),
-#	('First', 'Third.'),
-#	('Second', 'Third.'),
-#	('First',),
-#	('Second',),
-#	('Third.',)
-# ]
-def create_sentence_combinations(text):
-	sentences = text.split('. ')
-	options = []
-	for i in range(len(sentences), 0, -1):
-		for subset in itertools.combinations(sentences, i):
-			options.append(subset)
-	return options
-
-def construct_tweet_text(screen_name, pokemon, language):
-	def create_fitting_text(prefix, optional_prefix, sep, text, length):
-		for combination in create_sentence_combinations(text):
-			# First try to fit the optional_prefix, then try without
-			for opt in [optional_prefix, '']:
-				fitted = prefix + optional_prefix + sep + '. '.join(combination)
-				fitted = fitted + '.' if not fitted.endswith('.') else fitted
-				if len(fitted) <= length:
-					logging.debug("Including '{}'".format(optional_prefix.encode('utf-8')))
-					logging.info('Managed to fit {} / {} sentences: {} / {} chars'.format(
-						len(combination), len(text.split('. ')), len(fitted), length))
-					return fitted
-		# No sentence could be fitted
-		return None
-
+def construct_pokedex_tweet(screen_name, pokemon, language):
 	name = pokemon['names'][language]
-	logging.debug("Constructing tweet '{}' in '{}'".format(name, language))
-	name = bold(name)
+	logging.debug("Building Pokedex tweet: '{}' in '{}'".format(name, language))
 	genus = ', ' + italic(pokemon['genus'][language])
-	screen_name = '@' + screen_name if not screen_name.startswith('@') else screen_name
-	beginning = screen_name + ' ' + name
-	sep = ': '
 
 	flavor_texts = pokemon['flavor_texts'][language]
 	flavor_text = random.choice(flavor_texts)['text']
 	logging.debug('Chose one flavor text from {}'.format(len(flavor_texts)))
 
-	fitted_status = create_fitting_text(beginning, genus, sep, flavor_text, MEDIA_TWEET_LENGTH)
+	format_str = '@' + screen_name + ' ' + bold(name) + '{optional}' + ': ' + '{text}'
+
+	fitted_status = fit_sentences(format_str, genus, flavor_text, MEDIA_TWEET_LENGTH)
 	if fitted_status is not None:
+		is_media_tweet = True
 		logging.debug('Can use media tweet')
-		return (fitted_status, True)
 	else:
+		is_media_tweet = False
 		logging.debug('Cannot fit any sentence into media tweet. Dropping media.')
-		fitted_status = create_fitting_text(beginning, genus, sep, flavor_text, TWEET_LENGTH)
-		return (fitted_status, False)
+		fitted_status = fit_sentences(format_str, genus, flavor_text, TWEET_LENGTH)
+	return (fitted_status, is_media_tweet)
 
-def upload_twitter_picture(account, picture_path):
-	photo = open(picture_path, 'rb')
-	logging.debug("Uploading '{}'".format(picture_path))
-	response = account.upload_media(media=photo)
-	return response['media_id']
-
-def reply_media_tweet(account, status, reply_id, media_path):
-	media_id = upload_twitter_picture(account, media_path)
-	tweet = account.update_status(status=status, media_ids=[media_id], in_reply_to_status_id=reply_id)
-	logging.info('Responded with media to {}'.format(reply_id))
-	return tweet
-
-def reply_text_tweet(account, status, reply_id):
-	tweet = account.update_status(status=status, in_reply_to_status_id=reply_id)
-	logging.info('Responded with text to {}'.format(reply_id))
-	return tweet
 
 if __name__ == '__main__':
 	logging.basicConfig(level=logging.DEBUG)
@@ -185,13 +192,12 @@ if __name__ == '__main__':
 	screen_name = poke_tweet['user']['screen_name']
 	reply_id = poke_tweet['id']
 	logging.info(TWITTER_STATUS_URL_TEMPLATE.format(screen_name=screen_name, id=reply_id))
-
 	logging.info('user: @{user}, lang: {lang}, mentioned: {poke}'.format(
 		user=screen_name, lang=tweet_lang, poke=pokemon_name))
 	logging.debug("text: '{}'".format(poke_tweet['text'].encode('utf-8')))
 
 	pokemon = fetch_from_pokedex(pokedex, pokemon_name)
-	status, is_media_tweet = construct_tweet_text(screen_name, pokemon, tweet_lang)
+	status, is_media_tweet = construct_pokedex_tweet(screen_name, pokemon, tweet_lang)
 	logging.info(status)
 
 	if status is None:
