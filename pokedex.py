@@ -20,6 +20,10 @@ PICTURE_PATH_TEMPLATE = 'pokemon-sugimori/{id}.png'
 TWITTER_STATUS_URL_TEMPLATE = 'https://twitter.com/{screen_name}/status/{id}'
 TWITTER_ACCOUNT_NAME = 'yourpokedex'
 
+#
+# TWITTER
+#
+
 def verify_credentials(account):
 	# https://dev.twitter.com/rest/reference/get/account/verify_credentials
 	info = account.verify_credentials(include_entities=False, skip_status=True, include_email=False)
@@ -50,7 +54,49 @@ def reply_text_tweet(account, status, reply_id):
 	logging.info('Responded with text to {}'.format(reply_id))
 	return tweet
 
-# Return a list of sentence combinations
+# Find first tweet mentioning any element of query_list_OR
+# in the tweet text (excluding user names).
+# Only tweets for which predicate_func(tweet) is truthy are returned.
+# Returns a tuple of the found status/tweet and what element of
+# the query_list_OR was identified.
+# Returns (None, None) if no matching tweets were found.
+def find_tweet(account, query_list_OR, predicate_func):
+	counter = 0
+	while counter <= len(query_list_OR):
+		current_query = query_list_OR[counter:counter+STEP]
+		logging.debug("Searching for '{}'".format(', '.join(current_query)))
+		statuses = account.search(q=' OR '.join(current_query), count=50)['statuses']
+		rate_limit = account.get_lastfunction_header('x-rate-limit-remaining')
+		logging.info('Rate limit remaining: {}'.format(rate_limit))
+		logging.debug("Found {} matching tweets".format(len(statuses)))
+		counter += STEP
+		for status in statuses:
+			# Should be able to identify which part of the query list was mentioned
+			text = status['text'].lower().encode('utf-8')
+			found = None
+			for query_item in current_query:
+				if text.rfind(query_item.lower()) > -1:
+					found = query_item
+			if found is None:
+				continue
+			# Identified query part should not be part of user's name
+			if status['user']['screen_name'].lower().find(found.lower()) > -1:
+				continue
+			# Identified query part should not be part of a mentioned user's name
+			mentions = status['entities'].get('user_mentions')
+			for m in mentions:
+				if found.lower() in m['screen_name'].lower():
+					continue
+			if not predicate_func(status):
+				continue
+			return (status, found)
+	return (None, None)
+
+#
+# UTILS
+#
+
+# Return a list of ordered sentence combinations
 # create_sentence_combinations('First. Second. Third.') == [
 #	('First', 'Second', 'Third.'),
 #	('First', 'Second'),
@@ -89,9 +135,12 @@ def fit_sentences(format_str, optional, text, length):
 	# No sentence could be fitted
 	return None
 
-def fetch_from_pokedex(pokedex, name):
-	return next((p for p in pokedex if name in p['names'].values()), None)
+#
+# POKEDEX
+#
 
+# predicate function, returns whether a found pokemon
+# tweet should be responded to
 def _should_respond(tweet):
 	# https://dev.twitter.com/overview/api/tweets
 	# Shouldn't have interacted with tweet previously
@@ -117,37 +166,8 @@ def _should_respond(tweet):
 		return False
 	return True
 
-def find_tweet(account, query_list_OR):
-	counter = 0
-	while counter <= len(query_list_OR):
-		current_query = query_list_OR[counter:counter+STEP]
-		logging.debug("Searching for '{}'".format(', '.join(current_query)))
-		statuses = account.search(q=' OR '.join(current_query), count=50)['statuses']
-		rate_limit = account.get_lastfunction_header('x-rate-limit-remaining')
-		logging.info('Rate limit remaining: {}'.format(rate_limit))
-		logging.debug("Found {} matching tweets".format(len(statuses)))
-		counter += STEP
-		for status in statuses:
-			# Should be able to identify which part of the query list was mentioned
-			text = status['text'].lower().encode('utf-8')
-			found = None
-			for query_item in current_query:
-				if text.rfind(query_item.lower()) > -1:
-					found = query_item
-			if found is None:
-				continue
-			# Identified query part should not be part of user's name
-			if status['user']['screen_name'].lower().find(found.lower()) > -1:
-				continue
-			# Identified query part should not be part of a mentioned user's name
-			mentions = status['entities'].get('user_mentions')
-			for m in mentions:
-				if found.lower() in m['screen_name'].lower():
-					continue
-			if not _should_respond(status):
-				continue
-			return (status, found)
-	return None, None
+def fetch_from_pokedex(pokedex, name):
+	return next((p for p in pokedex if name in p['names'].values()), None)
 
 def construct_pokedex_tweet(screen_name, pokemon, language):
 	name = pokemon['names'][language]
@@ -183,7 +203,7 @@ if __name__ == '__main__':
 	random.shuffle(pokedex)
 	poke_names = [p['names']['en'].encode('utf-8') for p in pokedex]
 
-	poke_tweet, pokemon_name = find_tweet(account, poke_names)
+	poke_tweet, pokemon_name = find_tweet(account, poke_names, _should_respond)
 	if poke_tweet is None:
 		logging.warn('No pokemon tweets found :(')
 		sys.exit()
