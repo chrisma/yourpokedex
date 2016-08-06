@@ -14846,7 +14846,7 @@ class Pokedex:
 
   @classmethod
   def all_names(cls, lang='en', random_order=False):
-    names = [p['names'][lang].encode('utf-8') for p in cls.pokemons]
+    names = [p['names'][lang] for p in cls.pokemons]
     if random_order:
       random.shuffle(names)
     return names

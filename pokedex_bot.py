@@ -52,7 +52,7 @@ def fit_sentences(format_str, optional, text, length):
 			fitted = format_str.format(optional=opt, text='. '.join(combination))
 			fitted = fitted + '.' if not fitted.endswith('.') else fitted
 			if len(fitted) <= length:
-				logging.debug("Including '{}'".format(opt.encode('utf-8')))
+				logging.debug("Including '{}'".format(opt))
 				logging.info('Managed to fit {} / {} sentences: {} / {} chars'.format(
 					len(combination), len(text.split('. ')), len(fitted), length))
 				return fitted
@@ -133,7 +133,7 @@ if __name__ == '__main__':
 	logging.info(TWITTER_STATUS_URL_TEMPLATE.format(screen_name=screen_name, id=reply_id))
 	logging.info('user: @{user}, lang: {lang}, mentioned: {poke}'.format(
 		user=screen_name, lang=tweet_lang, poke=pokemon_name))
-	logging.debug("text: '{}'".format(poke_tweet['text'].encode('utf-8')))
+	logging.debug("text: '{}'".format(poke_tweet['text']))
 
 	pokemon = Pokedex.entry(pokemon_name)
 	status, is_media_tweet = construct_pokedex_tweet(screen_name, pokemon, tweet_lang)

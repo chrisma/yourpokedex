@@ -128,6 +128,6 @@ def bold(s):
 
 if __name__ == '__main__':
 	test = 'This is a TEST string 1234' 
-	print test
-	print italic(test)
-	print bold(test)
+	print(test)
+	print(italic(test))
+	print(bold(test))

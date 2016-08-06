@@ -17,7 +17,7 @@ class Tweeter:
 			log.error('Could not verify credentials')
 		else:
 			log.info('Logged in as @{name}, tweets: {tweets}, followers: {followers}'.format(
-				name = name.encode('utf-8'),
+				name = name,
 				tweets = info['statuses_count'],
 				followers = info['followers_count']))
 		return info
@@ -66,7 +66,7 @@ class Tweeter:
 			counter += self.step
 			for status in statuses:
 				# Should be able to identify which part of the query list was mentioned
-				text = status['text'].lower().encode('utf-8')
+				text = status['text'].lower()
 				found = None
 				for query_item in current_query:
 					if text.rfind(query_item.lower()) > -1:
