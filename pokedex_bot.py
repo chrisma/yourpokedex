@@ -113,7 +113,7 @@ def construct_pokedex_tweet(screen_name, pokemon, language):
 
 
 if __name__ == '__main__':
-	logging.basicConfig(level=logging.DEBUG)
+	logging.basicConfig(level=logging.INFO)
 	logging.getLogger('requests').setLevel(logging.WARN)
 	logging.getLogger('requests_oauthlib').setLevel(logging.WARN)
 	logging.getLogger('oauthlib').setLevel(logging.WARN)
