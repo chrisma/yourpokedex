@@ -83,7 +83,7 @@ class Tweeter:
 					if found.lower() in m['screen_name'].lower():
 						continue
 				# Identified query part should not be in user name being replied to
-				if found.lower() in status.get('in_reply_to_screen_name',''):
+				if found.lower() in (status['in_reply_to_screen_name'] or '').lower():
 					continue
 				# Should return True for the passed predicate_func
 				if not predicate_func(status):
