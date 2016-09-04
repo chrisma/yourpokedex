@@ -71,16 +71,21 @@ class Tweeter:
 				for query_item in current_query:
 					if text.rfind(query_item.lower()) > -1:
 						found = query_item
+						break
 				if found is None:
 					continue
-				# Identified query part should not be part of user's name
-				if status['user']['screen_name'].lower().find(found.lower()) > -1:
+				# Identified query part should not be part of tweeting user's name
+				if found.lower() in status['user']['screen_name'].lower():
 					continue
 				# Identified query part should not be part of a mentioned user's name
 				mentions = status['entities'].get('user_mentions')
 				for m in mentions:
 					if found.lower() in m['screen_name'].lower():
 						continue
+				# Identified query part should not be in user name being replied to
+				if found.lower() in status.get('in_reply_to_screen_name',''):
+					continue
+				# Should return True for the passed predicate_func
 				if not predicate_func(status):
 					continue
 				return (status, found)
