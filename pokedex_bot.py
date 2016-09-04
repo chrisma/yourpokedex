@@ -8,13 +8,14 @@ import itertools
 import random
 import logging
 import sys
+import os
 
 TWEET_LENGTH = 140
 LENGTH_MEDIA_URL = 24
 MEDIA_TWEET_LENGTH = TWEET_LENGTH - LENGTH_MEDIA_URL
 TWITTER_STATUS_URL_TEMPLATE = 'https://twitter.com/{screen_name}/status/{id}'
 TWITTER_ACCOUNT_NAME = 'yourpokedex'
-PICTURE_PATH_TEMPLATE = 'pokemon-sugimori/{id}.png'
+PICTURE_PATH_TEMPLATE = os.path.dirname(os.path.realpath(__file__)) + '/pokemon-sugimori/{id}.png'
 
 #
 # UTILS
