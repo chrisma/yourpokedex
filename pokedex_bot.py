@@ -120,6 +120,15 @@ if __name__ == '__main__':
 	logging.getLogger('oauthlib').setLevel(logging.WARN)
 	
 	logging.debug('Started!')
+
+	# pokemon = Pokedex.entry('Doduo')
+	# screen_name = 'cheesemanofderp'
+	# entry, is_media_tweet = construct_pokedex_tweet(screen_name, pokemon, 'en')
+	# print(entry)
+	# if is_media_tweet:
+	# 	print(PICTURE_PATH_TEMPLATE.format(id=pokemon['id']))
+	# sys.exit()
+
 	tweeter = Tweeter(APP_KEY, APP_SECRET, OAUTH_TOKEN, OAUTH_TOKEN_SECRET)
 	poke_names = Pokedex.all_names(lang='en', random_order=True)
 
