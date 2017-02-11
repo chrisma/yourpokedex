@@ -13,8 +13,6 @@ import argparse
 
 
 TWEET_LENGTH = 140
-LENGTH_MEDIA_URL = 24
-MEDIA_TWEET_LENGTH = TWEET_LENGTH - LENGTH_MEDIA_URL
 TWITTER_STATUS_URL_TEMPLATE = 'https://twitter.com/{screen_name}/status/{id}'
 TWITTER_ACCOUNT_NAME = 'yourpokedex'
 PICTURE_PATH_TEMPLATE = os.path.dirname(os.path.realpath(__file__)) + '/pokemon-sugimori/{id}.png'
@@ -104,15 +102,7 @@ def construct_pokedex_tweet(screen_name, pokemon, language):
 
 	format_str = '@' + screen_name + ' ' + bold(name) + '{optional}' + ': ' + '{text}'
 
-	fitted_status = fit_sentences(format_str, genus, flavor_text, MEDIA_TWEET_LENGTH)
-	if fitted_status is not None:
-		is_media_tweet = True
-		logging.debug('Can use media tweet')
-	else:
-		is_media_tweet = False
-		logging.debug('Cannot fit any sentence into media tweet. Dropping media.')
-		fitted_status = fit_sentences(format_str, genus, flavor_text, TWEET_LENGTH)
-	return (fitted_status, is_media_tweet)
+	return fit_sentences(format_str, genus, flavor_text, TWEET_LENGTH)
 
 
 if __name__ == '__main__':
@@ -152,7 +142,7 @@ if __name__ == '__main__':
 	logging.debug("text: '{}'".format(poke_tweet['text']))
 
 	pokemon = Pokedex.entry(pokemon_name)
-	status, is_media_tweet = construct_pokedex_tweet(screen_name, pokemon, tweet_lang)
+	status = construct_pokedex_tweet(screen_name, pokemon, tweet_lang)
 	logging.info(status)
 
 	if status is None:
@@ -163,11 +153,8 @@ if __name__ == '__main__':
 		logging.info('DRY RUN! Not posting anything.')
 		sys.exit()
 
-	if is_media_tweet:
-		picture_path = PICTURE_PATH_TEMPLATE.format(id=pokemon['id'])
-		tweet = tweeter.reply_media_tweet(status, reply_id, picture_path)
-	else:
-		tweet = tweeter.reply_text_tweet(status, reply_id)
+	picture_path = PICTURE_PATH_TEMPLATE.format(id=pokemon['id'])
+	tweet = tweeter.reply_media_tweet(status, reply_id, picture_path)
 	logging.info(TWITTER_STATUS_URL_TEMPLATE.format(screen_name=TWITTER_ACCOUNT_NAME, id=tweet['id']))
 	
 	# Tweets that are favorited are not replied to again
