@@ -9,6 +9,8 @@ import random
 import logging
 import sys
 import os
+import argparse
+
 
 TWEET_LENGTH = 140
 LENGTH_MEDIA_URL = 24
@@ -121,6 +123,10 @@ if __name__ == '__main__':
 	
 	logging.debug('Started!')
 
+	parser = argparse.ArgumentParser(description='Twitter bot that posts Pokemon infos to those that mention Pokemon names.')
+	parser.add_argument('-d', '--dry-run', action='store_true')
+	args = parser.parse_args()
+
 	# pokemon = Pokedex.entry('Doduo')
 	# screen_name = 'cheesemanofderp'
 	# entry, is_media_tweet = construct_pokedex_tweet(screen_name, pokemon, 'en')
@@ -151,6 +157,10 @@ if __name__ == '__main__':
 
 	if status is None:
 		logging.debug('Could not construct tweet')
+		sys.exit()
+
+	if args.dry_run:
+		logging.info('DRY RUN! Not posting anything.')
 		sys.exit()
 
 	if is_media_tweet:
