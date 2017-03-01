@@ -14841,7 +14841,7 @@ class Pokedex:
   pokemons = POKEDEX_DATA
 
   @classmethod
-  def entry(cls, name):
+  def entry(cls, name, lang):
     return next((p for p in cls.pokemons if name in p['names'].values()), None)
 
   @classmethod

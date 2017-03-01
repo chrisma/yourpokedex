@@ -1,10 +1,14 @@
 #!/usr/bin/env python
 
 from twython import Twython
+import itertools
 import logging
+
 log = logging.getLogger(__name__)
 
-class Tweeter:
+TWITTER_STATUS_URL_TEMPLATE = 'https://twitter.com/{screen_name}/status/{id}'
+
+class TweetBot:
 	def __init__(self, app_key, app_secret, oauth_token, oauth_token_secret):
 		self.account = Twython(app_key, app_secret, oauth_token, oauth_token_secret)
 		self.step = 15 
@@ -49,13 +53,53 @@ class Tweeter:
 		log.debug('Favorited tweet {}'.format(status_id))
 		return tweet
 
+	# Attempt to fill format_str with sentences from text
+	# (in the order returned by create_sentence_combinations)
+	# to produce a result shorter or equal to length.
+	# For every sentence combination, it is attempted to fit optional as well.
+	# format_str must have placeholders {optionl} and {text}.
+	# Makes sure the result has a full stop at the end
+	# Returns None if no sentences could be fitted
+	def fit_sentences(self, format_str, optional, text, length):
+		# Return a list of ordered sentence combinations
+		# create_sentence_combinations('First. Second. Third.') == [
+		#	('First', 'Second', 'Third.'),
+		#	('First', 'Second'),
+		#	('First', 'Third.'),
+		#	('Second', 'Third.'),
+		#	('First',),
+		#	('Second',),
+		#	('Third.',)
+		# ]
+		def create_sentence_combinations(text):
+			sentences = text.split('. ')
+			options = []
+			for i in range(len(sentences), 0, -1):
+				for subset in itertools.combinations(sentences, i):
+					options.append(subset)
+			return options
+
+		for combination in create_sentence_combinations(text):
+			# First try to fit optional, then try without
+			for opt in [optional, '']:
+				fitted = format_str.format(optional=opt, text='. '.join(combination))
+				fitted = fitted + '.' if not fitted.endswith('.') else fitted
+				if len(fitted) <= length:
+					log.debug("Including optional text '{}'".format(opt))
+					log.info('Fit {} / {} sentences: {} / {} chars'.format(
+						len(combination), len(text.split('. ')), len(fitted), length))
+					return fitted
+		# No sentence could be fitted
+		log.warn("No sentence of '{}' could be fitted".format(text))
+		return None
+
 	# Find first tweet mentioning any element of query_list_OR
 	# in the tweet text (excluding user names).
 	# Only tweets for which predicate_func(tweet) is truthy are returned.
 	# Returns a tuple of the found status/tweet and what element of
 	# the query_list_OR was identified.
 	# Returns (None, None) if no matching tweets were found.
-	def find_tweet(self, query_list_OR, predicate_func):
+	def find_single_tweet(self, query_list_OR, predicate_func):
 		counter = 0
 		while counter <= len(query_list_OR):
 			current_query = query_list_OR[counter:counter+self.step]
@@ -88,5 +132,7 @@ class Tweeter:
 				# Should return True for the passed predicate_func
 				if not predicate_func(status):
 					continue
+				log.info(TWITTER_STATUS_URL_TEMPLATE.format(screen_name=status['user']['screen_name'], id=status['id']))
 				return (status, found)
+		log.warn("No tweets matching '{}' were found".format(query_list_OR))
 		return (None, None)

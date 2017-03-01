@@ -1,64 +1,20 @@
 #!/usr/bin/env python
 
 from credentials import *
-from tweeter import Tweeter
+from tweeter import TweetBot
 from pokedex import Pokedex
 from fancy_text import italic, bold
-import itertools
 import random
 import logging
 import sys
 import os
 import argparse
+import re
 
 
 TWEET_LENGTH = 140
-TWITTER_STATUS_URL_TEMPLATE = 'https://twitter.com/{screen_name}/status/{id}'
 TWITTER_ACCOUNT_NAME = 'yourpokedex'
 PICTURE_PATH_TEMPLATE = os.path.dirname(os.path.realpath(__file__)) + '/pokemon-sugimori/{id}.png'
-
-#
-# UTILS
-#
-
-# Return a list of ordered sentence combinations
-# create_sentence_combinations('First. Second. Third.') == [
-#	('First', 'Second', 'Third.'),
-#	('First', 'Second'),
-#	('First', 'Third.'),
-#	('Second', 'Third.'),
-#	('First',),
-#	('Second',),
-#	('Third.',)
-# ]
-def create_sentence_combinations(text):
-	sentences = text.split('. ')
-	options = []
-	for i in range(len(sentences), 0, -1):
-		for subset in itertools.combinations(sentences, i):
-			options.append(subset)
-	return options
-
-# Attempt to fill format_str with sentences from text
-# (in the order returned by create_sentence_combinations)
-# to produce a result shorter or equal to length.
-# For every sentence combination, it is attempted to fit optional as well.
-# format_str must have placeholders {optionl} and {text}.
-# Makes sure the result has a full stop at the end
-# Returns None if no sentences could be fitted
-def fit_sentences(format_str, optional, text, length):
-	for combination in create_sentence_combinations(text):
-		# First try to fit optional, then try without
-		for opt in [optional, '']:
-			fitted = format_str.format(optional=opt, text='. '.join(combination))
-			fitted = fitted + '.' if not fitted.endswith('.') else fitted
-			if len(fitted) <= length:
-				logging.debug("Including '{}'".format(opt))
-				logging.info('Managed to fit {} / {} sentences: {} / {} chars'.format(
-					len(combination), len(text.split('. ')), len(fitted), length))
-				return fitted
-	# No sentence could be fitted
-	return None
 
 #
 # POKEDEX
@@ -89,24 +45,16 @@ def _should_respond(tweet):
 	# Should not include possibly sensitive URLs
 	if tweet.get('possibly_sensitive'):
 		return False
+	# Should not be a Pokemon GO alert bot, that automatically
+	# posts expiry times in the format 'until 13:00:00AM'
+	if re.search('\d+:\d+:\d+', tweet['text'].lower()):
+		logging.debug("Skipped Pokemon GO bot: \"{}\"".format(tweet['text'].replace('\n', ' ')))
+		return False
 	return True
-
-def construct_pokedex_tweet(screen_name, pokemon, language):
-	name = pokemon['names'][language]
-	logging.debug("Building Pokedex tweet: '{}' in '{}'".format(name, language))
-	genus = ', ' + italic(pokemon['genus'][language])
-
-	flavor_texts = pokemon['flavor_texts'][language]
-	flavor_text = random.choice(flavor_texts)['text']
-	logging.debug('Chose one flavor text from {}'.format(len(flavor_texts)))
-
-	format_str = '@' + screen_name + ' ' + bold(name) + '{optional}' + ': ' + '{text}'
-
-	return fit_sentences(format_str, genus, flavor_text, TWEET_LENGTH)
 
 
 if __name__ == '__main__':
-	logging.basicConfig(level=logging.INFO)
+	logging.basicConfig(level=logging.DEBUG)
 	logging.getLogger('requests').setLevel(logging.WARN)
 	logging.getLogger('requests_oauthlib').setLevel(logging.WARN)
 	logging.getLogger('oauthlib').setLevel(logging.WARN)
@@ -117,6 +65,7 @@ if __name__ == '__main__':
 	parser.add_argument('-d', '--dry-run', action='store_true')
 	args = parser.parse_args()
 
+	## Get info of single pokemon
 	# pokemon = Pokedex.entry('Doduo')
 	# screen_name = 'cheesemanofderp'
 	# entry, is_media_tweet = construct_pokedex_tweet(screen_name, pokemon, 'en')
@@ -125,37 +74,35 @@ if __name__ == '__main__':
 	# 	print(PICTURE_PATH_TEMPLATE.format(id=pokemon['id']))
 	# sys.exit()
 
-	tweeter = Tweeter(APP_KEY, APP_SECRET, OAUTH_TOKEN, OAUTH_TOKEN_SECRET)
 	poke_names = Pokedex.all_names(lang='en', random_order=True)
 
-	poke_tweet, pokemon_name = tweeter.find_tweet(poke_names, _should_respond)
-	if poke_tweet is None:
-		logging.warn('No pokemon tweets found :(')
-		sys.exit()
+	poke_bot = TweetBot(APP_KEY, APP_SECRET, OAUTH_TOKEN, OAUTH_TOKEN_SECRET)
+	tweet, poke_name = poke_bot.find_single_tweet(poke_names, _should_respond)
+	if tweet is None: sys.exit()
+	screen_name = tweet['user']['screen_name']
+	lang = tweet['lang']
+	tweet_id = tweet['id']
+	logging.debug("@{user} ({lang}) mentioned '{poke}': \"{text}\"".format(
+		user=screen_name,
+		lang=lang,
+		poke=poke_name,
+		text=tweet['text'].replace('\n',' ')))
 
-	tweet_lang = poke_tweet['lang']
-	screen_name = poke_tweet['user']['screen_name']
-	reply_id = poke_tweet['id']
-	logging.info(TWITTER_STATUS_URL_TEMPLATE.format(screen_name=screen_name, id=reply_id))
-	logging.info('user: @{user}, lang: {lang}, mentioned: {poke}'.format(
-		user=screen_name, lang=tweet_lang, poke=pokemon_name))
-	logging.debug("text: '{}'".format(poke_tweet['text']))
-
-	pokemon = Pokedex.entry(pokemon_name)
-	status = construct_pokedex_tweet(screen_name, pokemon, tweet_lang)
-	logging.info(status)
-
-	if status is None:
-		logging.debug('Could not construct tweet')
-		sys.exit()
-
+	pokemon = Pokedex.entry(poke_name, lang)
+	genus = ', ' + italic(pokemon['genus'][lang])
+	flavor_text = random.choice(pokemon['flavor_texts'][lang])['text']
+	reply_start = '@' + screen_name + ' ' + bold(pokemon['names'][lang])
+	format_str = reply_start + '{optional}' + ': ' + '{text}'
+	text = poke_bot.fit_sentences(format_str, genus, flavor_text, TWEET_LENGTH)
+	if text is None: sys.exit()
+	logging.debug(text)
 	if args.dry_run:
 		logging.info('DRY RUN! Not posting anything.')
 		sys.exit()
 
 	picture_path = PICTURE_PATH_TEMPLATE.format(id=pokemon['id'])
-	tweet = tweeter.reply_media_tweet(status, reply_id, picture_path)
-	logging.info(TWITTER_STATUS_URL_TEMPLATE.format(screen_name=TWITTER_ACCOUNT_NAME, id=tweet['id']))
+	respone_tweet = poke_bot.reply_media_tweet(text, tweet_id, picture_path)
+	logging.info(TWITTER_STATUS_URL_TEMPLATE.format(screen_name=TWITTER_ACCOUNT_NAME, id=respone_tweet['id']))
 	
 	# Tweets that are favorited are not replied to again
-	tweeter.favorite(reply_id)
+	poke_bot.favorite(tweet_id)
