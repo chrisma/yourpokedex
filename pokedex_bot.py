@@ -89,20 +89,20 @@ if __name__ == '__main__':
 		text=tweet['text'].replace('\n',' ')))
 
 	pokemon = Pokedex.entry(poke_name, lang)
-	genus = ', ' + italic(pokemon['genus'][lang])
-	flavor_text = random.choice(pokemon['flavor_texts'][lang])['text']
-	reply_start = '@' + screen_name + ' ' + bold(pokemon['names'][lang])
+	genus = ', ' + italic(pokemon['genus'])
+	flavor_text = random.choice(pokemon['flavor_texts'])['text']
+	reply_start = '@' + screen_name + ' ' + bold(pokemon['names'])
 	format_str = reply_start + '{optional}' + ': ' + '{text}'
 	text = poke_bot.fit_sentences(format_str, genus, flavor_text, TWEET_LENGTH)
 	if text is None: sys.exit()
 	logging.debug(text)
+
 	if args.dry_run:
 		logging.info('DRY RUN! Not posting anything.')
 		sys.exit()
 
 	picture_path = PICTURE_PATH_TEMPLATE.format(id=pokemon['id'])
-	respone_tweet = poke_bot.reply_media_tweet(text, tweet_id, picture_path)
-	logging.info(TWITTER_STATUS_URL_TEMPLATE.format(screen_name=TWITTER_ACCOUNT_NAME, id=respone_tweet['id']))
+	poke_bot.reply_media_tweet(text, tweet_id, picture_path)
 	
 	# Tweets that are favorited are not replied to again
 	poke_bot.favorite(tweet_id)

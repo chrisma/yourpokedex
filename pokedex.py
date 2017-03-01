@@ -14841,8 +14841,13 @@ class Pokedex:
   pokemons = POKEDEX_DATA
 
   @classmethod
-  def entry(cls, name, lang):
-    return next((p for p in cls.pokemons if name in p['names'].values()), None)
+  def entry(cls, name, lang='en'):
+    match = next((p for p in cls.pokemons if name.lower() == p['names'][lang].lower()), None)
+    if match is not None:
+      match['flavor_texts'] = match['flavor_texts'][lang]
+      match['genus'] = match['genus'][lang]
+      match['names'] = match['names'][lang]
+    return match
 
   @classmethod
   def all_names(cls, lang='en', random_order=False):

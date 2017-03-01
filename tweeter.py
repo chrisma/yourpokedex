@@ -6,7 +6,7 @@ import logging
 
 log = logging.getLogger(__name__)
 
-TWITTER_STATUS_URL_TEMPLATE = 'https://twitter.com/{screen_name}/status/{id}'
+TWITTER_STATUS_URL_TEMPLATE = 'https://twitter.com/i/web/{id}'
 
 class TweetBot:
 	def __init__(self, app_key, app_secret, oauth_token, oauth_token_secret):
@@ -35,7 +35,7 @@ class TweetBot:
 	def reply_media_tweet(self, status, reply_id, media_path):
 		media_id = self.upload_twitter_picture(media_path)
 		tweet = self.account.update_status(status=status, media_ids=[media_id], in_reply_to_status_id=reply_id)
-		log.info('Responded with media to {}'.format(reply_id))
+		log.info(tweet['entities']['urls'][0]['expanded_url'])
 		return tweet
 
 	def reply_text_tweet(self, status, reply_id):
@@ -85,9 +85,8 @@ class TweetBot:
 				fitted = format_str.format(optional=opt, text='. '.join(combination))
 				fitted = fitted + '.' if not fitted.endswith('.') else fitted
 				if len(fitted) <= length:
-					log.debug("Including optional text '{}'".format(opt))
-					log.info('Fit {} / {} sentences: {} / {} chars'.format(
-						len(combination), len(text.split('. ')), len(fitted), length))
+					log.debug('Fit {} / {} sentences, {} / {} chars, included optional: "{}"'.format(
+						len(combination), len(text.split('. ')), len(fitted), length, opt))
 					return fitted
 		# No sentence could be fitted
 		log.warn("No sentence of '{}' could be fitted".format(text))
@@ -132,7 +131,7 @@ class TweetBot:
 				# Should return True for the passed predicate_func
 				if not predicate_func(status):
 					continue
-				log.info(TWITTER_STATUS_URL_TEMPLATE.format(screen_name=status['user']['screen_name'], id=status['id']))
+				log.info(TWITTER_STATUS_URL_TEMPLATE.format(id=status['id']))
 				return (status, found)
 		log.warn("No tweets matching '{}' were found".format(query_list_OR))
 		return (None, None)
