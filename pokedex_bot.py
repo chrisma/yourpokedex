@@ -11,6 +11,7 @@ import os
 import argparse
 import re
 
+log = logging.getLogger('poke_bot')
 
 TWEET_LENGTH = 140
 TWITTER_ACCOUNT_NAME = 'yourpokedex'
@@ -48,25 +49,25 @@ def _should_respond(tweet):
 	# Should not be a Pokemon GO alert bot, that automatically
 	# posts expiry times in the format 'until 13:00:00AM'
 	if re.search('\d+:\d+:\d+', tweet['text'].lower()):
-		logging.debug("Skipped Pokemon GO bot: \"{}\"".format(tweet['text'].replace('\n', ' ')))
+		log.debug("Skipped Pokemon GO bot: \"{}\"".format(tweet['text'].replace('\n', ' ')))
 		return False
 	return True
 
 def poke_reply(screen_name, poke_name, lang="en"):
-	logging.debug("@{user} ({lang}) Pokemon: '{poke}'".format(
+	log.debug("@{user} ({lang}) Pokemon: '{poke}'".format(
 		user=screen_name,
 		lang=lang,
 		poke=poke_name))
 	pokemon = Pokedex.entry(poke_name, lang)
 	if pokemon is None:
-		logging.debug('No Pokedex entry in {} found for "{}"'.format(lang, poke_name))
+		log.debug('No Pokedex entry in {} found for "{}"'.format(lang, poke_name))
 		return (None, None)
 	genus = ', ' + italic(pokemon['genus'])
 	flavor_text = random.choice(pokemon['flavor_texts'])['text']
 	reply_start = '@' + screen_name + ' ' + bold(pokemon['names'])
 	format_str = reply_start + '{optional}' + ': ' + '{text}'
 	text = fit_sentences(format_str, genus, flavor_text, TWEET_LENGTH)
-	logging.debug(text)
+	log.debug(text)
 	picture_path = PICTURE_PATH_TEMPLATE.format(id=pokemon['id'])
 	return (text, picture_path)
 
@@ -77,7 +78,7 @@ if __name__ == '__main__':
 	logging.getLogger('requests_oauthlib').setLevel(logging.WARN)
 	logging.getLogger('oauthlib').setLevel(logging.WARN)
 	
-	logging.debug('Started!')
+	log.debug('Started!')
 
 	parser = argparse.ArgumentParser(description='Twitter bot that replies with Pokemon info to users who mention Pokemon.')
 	parser.add_argument('-d', '--dry-run', action='store_true', help="print tweet without actually posting it.")
@@ -104,7 +105,7 @@ if __name__ == '__main__':
 	
 	if text is not None:
 		if args.dry_run or args.m:
-			logging.info('DRY RUN! Not posting anything.')
+			log.info('DRY RUN! Not posting anything.')
 		else:
 			tweet_id = tweet['id']
 			poke_bot.reply_media_tweet(text, tweet_id, picture_path)
