@@ -106,6 +106,8 @@ if __name__ == '__main__':
 	if text is not None:
 		if args.dry_run or args.m:
 			log.info('DRY RUN! Not posting anything.')
+			print(text)
+			print(pic_path)
 		else:
 			tweet_id = tweet['id']
 			poke_bot.reply_media_tweet(text, tweet_id, picture_path)
