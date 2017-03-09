@@ -53,45 +53,6 @@ class TweetBot:
 		log.debug('Favorited tweet {}'.format(status_id))
 		return tweet
 
-	# Attempt to fill format_str with sentences from text
-	# (in the order returned by create_sentence_combinations)
-	# to produce a result shorter or equal to length.
-	# For every sentence combination, it is attempted to fit optional as well.
-	# format_str must have placeholders {optionl} and {text}.
-	# Makes sure the result has a full stop at the end
-	# Returns None if no sentences could be fitted
-	def fit_sentences(self, format_str, optional, text, length):
-		# Return a list of ordered sentence combinations
-		# create_sentence_combinations('First. Second. Third.') == [
-		#	('First', 'Second', 'Third.'),
-		#	('First', 'Second'),
-		#	('First', 'Third.'),
-		#	('Second', 'Third.'),
-		#	('First',),
-		#	('Second',),
-		#	('Third.',)
-		# ]
-		def create_sentence_combinations(text):
-			sentences = text.split('. ')
-			options = []
-			for i in range(len(sentences), 0, -1):
-				for subset in itertools.combinations(sentences, i):
-					options.append(subset)
-			return options
-
-		for combination in create_sentence_combinations(text):
-			# First try to fit optional, then try without
-			for opt in [optional, '']:
-				fitted = format_str.format(optional=opt, text='. '.join(combination))
-				fitted = fitted + '.' if not fitted.endswith('.') else fitted
-				if len(fitted) <= length:
-					log.debug('Fit {} / {} sentences, {} / {} chars, included optional: "{}"'.format(
-						len(combination), len(text.split('. ')), len(fitted), length, opt))
-					return fitted
-		# No sentence could be fitted
-		log.warn("No sentence of '{}' could be fitted".format(text))
-		return None
-
 	# Find first tweet mentioning any element of query_list_OR
 	# in the tweet text (excluding user names).
 	# Only tweets for which predicate_func(tweet) is truthy are returned.
@@ -132,6 +93,46 @@ class TweetBot:
 				if not predicate_func(status):
 					continue
 				log.info(TWITTER_STATUS_URL_TEMPLATE.format(id=status['id']))
+				log.info(status['text'].replace('\n',' '))
 				return (status, found)
 		log.warn("No tweets matching '{}' were found".format(query_list_OR))
 		return (None, None)
+
+# Attempt to fill format_str with sentences from text
+# (in the order returned by create_sentence_combinations)
+# to produce a result shorter or equal to length.
+# For every sentence combination, it is attempted to fit optional as well.
+# format_str must have placeholders {optionl} and {text}.
+# Makes sure the result has a full stop at the end
+# Returns None if no sentences could be fitted
+def fit_sentences(format_str, optional, text, length):
+	# Return a list of ordered sentence combinations
+	# create_sentence_combinations('First. Second. Third.') == [
+	#	('First', 'Second', 'Third.'),
+	#	('First', 'Second'),
+	#	('First', 'Third.'),
+	#	('Second', 'Third.'),
+	#	('First',),
+	#	('Second',),
+	#	('Third.',)
+	# ]
+	def create_sentence_combinations(text):
+		sentences = text.split('. ')
+		options = []
+		for i in range(len(sentences), 0, -1):
+			for subset in itertools.combinations(sentences, i):
+				options.append(subset)
+		return options
+
+	for combination in create_sentence_combinations(text):
+		# First try to fit optional, then try without
+		for opt in [optional, '']:
+			fitted = format_str.format(optional=opt, text='. '.join(combination))
+			fitted = fitted + '.' if not fitted.endswith('.') else fitted
+			if len(fitted) <= length:
+				log.debug('Fit {} / {} sentences, {} / {} chars, included optional: "{}"'.format(
+					len(combination), len(text.split('. ')), len(fitted), length, opt))
+				return fitted
+	# No sentence could be fitted
+	log.warn("No sentence of '{}' could be fitted".format(text))
+	return None

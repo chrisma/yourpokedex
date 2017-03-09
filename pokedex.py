@@ -14842,7 +14842,7 @@ class Pokedex:
 
   @classmethod
   def entry(cls, name, lang='en'):
-    match = next((p for p in cls.pokemons if name.lower() == p['names'][lang].lower()), None)
+    match = next((p for p in cls.pokemons if name.lower() == p.get('names').get(lang, '').lower()), None)
     if match is not None:
       match['flavor_texts'] = match['flavor_texts'][lang]
       match['genus'] = match['genus'][lang]

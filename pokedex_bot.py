@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 from credentials import *
-from tweeter import TweetBot
+from tweeter import TweetBot, fit_sentences
 from pokedex import Pokedex
 from fancy_text import italic, bold
 import random
@@ -52,6 +52,24 @@ def _should_respond(tweet):
 		return False
 	return True
 
+def poke_reply(screen_name, poke_name, lang="en"):
+	logging.debug("@{user} ({lang}) Pokemon: '{poke}'".format(
+		user=screen_name,
+		lang=lang,
+		poke=poke_name))
+	pokemon = Pokedex.entry(poke_name, lang)
+	if pokemon is None:
+		logging.debug('No Pokedex entry in {} found for "{}"'.format(lang, poke_name))
+		return (None, None)
+	genus = ', ' + italic(pokemon['genus'])
+	flavor_text = random.choice(pokemon['flavor_texts'])['text']
+	reply_start = '@' + screen_name + ' ' + bold(pokemon['names'])
+	format_str = reply_start + '{optional}' + ': ' + '{text}'
+	text = fit_sentences(format_str, genus, flavor_text, TWEET_LENGTH)
+	logging.debug(text)
+	picture_path = PICTURE_PATH_TEMPLATE.format(id=pokemon['id'])
+	return (text, picture_path)
+
 
 if __name__ == '__main__':
 	logging.basicConfig(level=logging.DEBUG)
@@ -61,48 +79,37 @@ if __name__ == '__main__':
 	
 	logging.debug('Started!')
 
-	parser = argparse.ArgumentParser(description='Twitter bot that posts Pokemon infos to those that mention Pokemon names.')
-	parser.add_argument('-d', '--dry-run', action='store_true')
+	parser = argparse.ArgumentParser(description='Twitter bot that replies with Pokemon info to users who mention Pokemon.')
+	parser.add_argument('-d', '--dry-run', action='store_true', help="print tweet without actually posting it.")
+	parser.add_argument('-m', nargs=3, metavar=('n', 'p', 'l'),
+		help="pass info '<screen_name> <poke_name> <lang>' manually. Implies '-d'")
 	args = parser.parse_args()
 
-	## Get info of single pokemon
-	# pokemon = Pokedex.entry('Doduo')
-	# screen_name = 'cheesemanofderp'
-	# entry, is_media_tweet = construct_pokedex_tweet(screen_name, pokemon, 'en')
-	# print(entry)
-	# if is_media_tweet:
-	# 	print(PICTURE_PATH_TEMPLATE.format(id=pokemon['id']))
-	# sys.exit()
+	tweet = None
+	if args.m:
+		text, pic_path = poke_reply(args.m[0], args.m[1], args.m[2])
+		print(text)
+		print(pic_path)
+	else:
+		poke_names = Pokedex.all_names(lang='en', random_order=True)
+		poke_bot = TweetBot(APP_KEY, APP_SECRET, OAUTH_TOKEN, OAUTH_TOKEN_SECRET)
+		tweet, poke_name = poke_bot.find_single_tweet(poke_names, _should_respond)
 
-	poke_names = Pokedex.all_names(lang='en', random_order=True)
-
-	poke_bot = TweetBot(APP_KEY, APP_SECRET, OAUTH_TOKEN, OAUTH_TOKEN_SECRET)
-	tweet, poke_name = poke_bot.find_single_tweet(poke_names, _should_respond)
-	if tweet is None: sys.exit()
-	screen_name = tweet['user']['screen_name']
-	lang = tweet['lang']
-	tweet_id = tweet['id']
-	logging.debug("@{user} ({lang}) mentioned '{poke}': \"{text}\"".format(
-		user=screen_name,
-		lang=lang,
-		poke=poke_name,
-		text=tweet['text'].replace('\n',' ')))
-
-	pokemon = Pokedex.entry(poke_name, lang)
-	genus = ', ' + italic(pokemon['genus'])
-	flavor_text = random.choice(pokemon['flavor_texts'])['text']
-	reply_start = '@' + screen_name + ' ' + bold(pokemon['names'])
-	format_str = reply_start + '{optional}' + ': ' + '{text}'
-	text = poke_bot.fit_sentences(format_str, genus, flavor_text, TWEET_LENGTH)
-	if text is None: sys.exit()
-	logging.debug(text)
-
-	if args.dry_run:
-		logging.info('DRY RUN! Not posting anything.')
-		sys.exit()
-
-	picture_path = PICTURE_PATH_TEMPLATE.format(id=pokemon['id'])
-	poke_bot.reply_media_tweet(text, tweet_id, picture_path)
+	text = None
+	if tweet is not None:
+		text, pic_path = poke_reply(
+			screen_name = tweet['user']['screen_name'],
+			poke_name = poke_name,
+			lang = tweet['lang'])
 	
-	# Tweets that are favorited are not replied to again
-	poke_bot.favorite(tweet_id)
+	if text is not None:
+		if args.dry_run or args.m:
+			logging.info('DRY RUN! Not posting anything.')
+		else:
+			tweet_id = tweet['id']
+			poke_bot.reply_media_tweet(text, tweet_id, picture_path)
+			# Tweets that are favorited are not replied to again
+			poke_bot.favorite(tweet_id)
+
+	# https://dev.twitter.com/rest/reference/get/statuses/retweets_of_me
+	# https://dev.twitter.com/rest/reference/get/statuses/mentions_timeline
