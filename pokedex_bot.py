@@ -13,7 +13,7 @@ import re
 
 log = logging.getLogger('poke_bot')
 
-TWEET_LENGTH = 140
+TWEET_LENGTH = 280
 TWITTER_ACCOUNT_NAME = 'yourpokedex'
 PICTURE_PATH_TEMPLATE = os.path.dirname(os.path.realpath(__file__)) + '/pokemon-sugimori/{id}.png'
 
@@ -31,6 +31,9 @@ def _should_respond(tweet):
 	# Shouldn't be a retweet
 	if tweet.get('retweeted_status') is not None:
 		return False
+	# Should not be a manual retweet, "RT ..."
+	if tweet['text'].lower().startswith("rt "):
+		return False
 	# Should be in supported language, can be 'und' if unknown
 	if tweet['lang'] not in Pokedex.supported_languages:
 		return False
@@ -46,6 +49,17 @@ def _should_respond(tweet):
 	# Should not include possibly sensitive URLs
 	if tweet.get('possibly_sensitive'):
 		return False
+	# Should not contain "pokemon" in Twitter handle, i.e. be a Pokémon account
+	banned_handles = ['Pokemon', 'Pokémon', 'Poke', 'Poké', 'Pkmn', 'Bot', 'Trainer']
+	for word in banned_handles:
+		if word.lower() in tweet['user']['screen_name'].lower():
+			return False
+	# Should not mention user with pokémon name as Twitter handle
+	for mention in tweet['entities']['user_mentions']:
+		for poke_name in [name.lower() for name in Pokedex.all_names_all_lang()]:
+			if poke_name in mention['screen_name'].lower():
+				log.debug("Skipping Pokémon Twitter handle mention: \"{}\"".format(mention['screen_name']))
+				return False
 	# Should not be a Pokemon GO alert bot, that automatically
 	# posts expiry times in the format 'until 13:00:00AM'
 	if re.search('\d+:\d+:\d+', tweet['text'].lower()):
@@ -72,23 +86,10 @@ def poke_reply(screen_name, poke_name, lang="en"):
 	return (text, picture_path)
 
 
-if __name__ == '__main__':
-	logging.basicConfig(level=logging.DEBUG)
-	logging.getLogger('requests').setLevel(logging.WARN)
-	logging.getLogger('requests_oauthlib').setLevel(logging.WARN)
-	logging.getLogger('oauthlib').setLevel(logging.WARN)
-	
-	log.debug('Started!')
-
-	parser = argparse.ArgumentParser(description='Twitter bot that replies with Pokemon info to users who mention Pokemon.')
-	parser.add_argument('-d', '--dry-run', action='store_true', help="print tweet without actually posting it.")
-	parser.add_argument('-m', nargs=3, metavar=('n', 'p', 'l'),
-		help="pass info '<screen_name> <poke_name> <lang>' manually. Implies '-d'")
-	args = parser.parse_args()
-
+def run(manual_info=None, dry_run=False):
 	tweet = None
-	if args.m:
-		text, pic_path = poke_reply(args.m[0], args.m[1], args.m[2])
+	if manual_info:
+		text, pic_path = poke_reply(manual_info[0], manual_info[1], manual_info[2])
 		print(text)
 		print(pic_path)
 	else:
@@ -104,15 +105,32 @@ if __name__ == '__main__':
 			lang = tweet['lang'])
 	
 	if text is not None:
-		if args.dry_run or args.m:
+		if dry_run or manual_info:
 			log.info('DRY RUN! Not posting anything.')
 			print(text)
 			print(pic_path)
 		else:
 			tweet_id = tweet['id']
-			poke_bot.reply_media_tweet(text, tweet_id, picture_path)
+			poke_bot.reply_media_tweet(text, tweet_id, pic_path)
 			# Tweets that are favorited are not replied to again
 			poke_bot.favorite(tweet_id)
+
+
+if __name__ == '__main__':
+	logging.basicConfig(level=logging.DEBUG)
+	logging.getLogger('requests').setLevel(logging.WARN)
+	logging.getLogger('requests_oauthlib').setLevel(logging.WARN)
+	logging.getLogger('oauthlib').setLevel(logging.WARN)
+	
+	log.debug('Started!')
+
+	parser = argparse.ArgumentParser(description='Twitter bot that replies with Pokemon info to users who mention Pokemon.')
+	parser.add_argument('-d', '--dry-run', action='store_true', help="print tweet without actually posting it.")
+	parser.add_argument('-m', nargs=3, metavar=('n', 'p', 'l'),
+		help="pass info '<screen_name> <poke_name> <lang>' manually. Implies '-d'")
+	args = parser.parse_args()
+
+	run(manual_info=args.m, dry_run=args.dry_run)
 
 	# https://dev.twitter.com/rest/reference/get/statuses/retweets_of_me
 	# https://dev.twitter.com/rest/reference/get/statuses/mentions_timeline

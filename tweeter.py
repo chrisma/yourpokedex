@@ -6,7 +6,7 @@ import logging
 
 log = logging.getLogger(__name__)
 
-TWITTER_STATUS_URL_TEMPLATE = 'https://twitter.com/i/web/{id}'
+TWITTER_STATUS_URL_TEMPLATE = 'https://twitter.com/i/web/status/{id}'
 
 class TweetBot:
 	def __init__(self, app_key, app_secret, oauth_token, oauth_token_secret):
@@ -35,7 +35,6 @@ class TweetBot:
 	def reply_media_tweet(self, status, reply_id, media_path):
 		media_id = self.upload_twitter_picture(media_path)
 		tweet = self.account.update_status(status=status, media_ids=[media_id], in_reply_to_status_id=reply_id)
-		log.info(tweet['entities']['urls'][0]['expanded_url'])
 		return tweet
 
 	def reply_text_tweet(self, status, reply_id):

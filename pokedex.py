@@ -14837,21 +14837,30 @@ POKEDEX_DATA = [{'flavor_texts': {'de': [{'text': u'Dieses Pok\xe9mon tr\xe4gt v
 
 
 class Pokedex:
-  supported_languages = ['de','en','es','fr','it','ja','ko','zh']
-  pokemons = POKEDEX_DATA
+    supported_languages = ['de','en','es','fr','it','ja','ko','zh']
+    pokemons = POKEDEX_DATA
 
-  @classmethod
-  def entry(cls, name, lang='en'):
-    match = next((p for p in cls.pokemons if name.lower() == p.get('names').get(lang, '').lower()), None)
-    if match is not None:
-      match['flavor_texts'] = match['flavor_texts'][lang]
-      match['genus'] = match['genus'][lang]
-      match['names'] = match['names'][lang]
-    return match
+    @classmethod
+    def entry(cls, name, lang='en'):
+        match = next((p for p in cls.pokemons if name.lower() == p.get('names').get(lang, '').lower()), None)
+        if match is not None:
+            match['flavor_texts'] = match['flavor_texts'][lang]
+            match['genus'] = match['genus'][lang]
+            match['names'] = match['names'][lang]
+        return match
 
-  @classmethod
-  def all_names(cls, lang='en', random_order=False):
-    names = [p['names'][lang] for p in cls.pokemons]
-    if random_order:
-      random.shuffle(names)
-    return names
+    @classmethod
+    def all_names(cls, lang='en', random_order=False):
+        names = [p['names'][lang] for p in cls.pokemons]
+        if random_order:
+            random.shuffle(names)
+        return names
+
+    @classmethod
+    def all_names_all_lang(cls, random_order=False):
+        names = []
+        for language in Pokedex.supported_languages:
+            names += Pokedex.all_names(lang=language)
+        if random_order:
+            random.shuffle(names)
+        return names
