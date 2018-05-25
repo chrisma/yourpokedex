@@ -79,7 +79,7 @@ def _should_respond(tweet):
 				return False
 	# Should not be a Pokemon GO alert bot, that automatically
 	# posts expiry times in the format 'until 13:00:00AM'
-	if re.search('\d+:\d+:\d+', tweet['text'].lower()):
+	if re.search(r'\d+:\d+:\d+', tweet['text'].lower()):
 		log.debug("Skipped Pokemon GO bot: \"{}\"".format(tweet['text'].replace('\n', ' ')))
 		return False
 	return True
