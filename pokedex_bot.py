@@ -19,20 +19,20 @@ PICTURE_PATH_TEMPLATE = os.path.dirname(os.path.realpath(__file__)) + '/pokemon-
 # Try to import the variables defined in credentials.py
 # If that does not exist (e.g. on Heroku), fall back to environment variables
 try:
-    from credentials import APP_KEY, APP_SECRET, OAUTH_TOKEN, OAUTH_TOKEN_SECRET
+	from credentials import APP_KEY, APP_SECRET, OAUTH_TOKEN, OAUTH_TOKEN_SECRET
 except ImportError as error:
-    print('Info: {e}'.format(e=error))
-    print('Info: Cannot load credentials.py. Will use environment variables.')
-    try:
-        APP_KEY = os.environ['APP_KEY']
-        APP_SECRET = os.environ['APP_SECRET']
-        OAUTH_TOKEN = os.environ['OAUTH_TOKEN']
-        OAUTH_TOKEN_SECRET = os.environ['OAUTH_TOKEN_SECRET']
-    except KeyError as error:
-        print('Error: {e} not found in environment variables'.format(e=error))
-        print('Error: Could not retrieve credentials from either credentials.py or environment variables. Make sure either is set.')
-        # can't do anything without credentials, so quit
-sys.exit()
+	print('Info: {e}'.format(e=error))
+	print('Info: Cannot load credentials.py. Will use environment variables.')
+	try:
+		APP_KEY = os.environ['APP_KEY']
+		APP_SECRET = os.environ['APP_SECRET']
+		OAUTH_TOKEN = os.environ['OAUTH_TOKEN']
+		OAUTH_TOKEN_SECRET = os.environ['OAUTH_TOKEN_SECRET']
+	except KeyError as error:
+		print('Error: {e} not found in environment variables'.format(e=error))
+		print('Error: Could not retrieve credentials from either credentials.py or environment variables. Make sure either is set.')
+		# can't do anything without credentials, so quit
+		sys.exit()
 
 #
 # POKEDEX
