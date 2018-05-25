@@ -1,5 +1,4 @@
 """Tweet regularly"""
-print('***', 'started!')
 
 # Allow running functions periodically
 # http://apscheduler.readthedocs.io/en/3.3.1/
