@@ -1,9 +1,13 @@
 """Tweet regularly"""
+print('***', 'started!')
 
 # Allow running functions periodically
 # http://apscheduler.readthedocs.io/en/3.3.1/
+print('***', 'import sys')
 import sys
+print('***', 'import apscheduler')
 from apscheduler.schedulers.blocking import BlockingScheduler
+print('***', 'import pokedex_bot')
 from pokedex_bot import run
 
 INTERVAL = 10
