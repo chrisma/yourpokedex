@@ -8,7 +8,7 @@ import datetime
 from apscheduler.schedulers.blocking import BlockingScheduler
 from pokedex_bot import run
 
-INTERVAL = 30
+INTERVAL = 34
 
 log = logging.getLogger('clock')
 
