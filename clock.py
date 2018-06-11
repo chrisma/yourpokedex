@@ -16,7 +16,7 @@ sched = BlockingScheduler()
 
 @sched.scheduled_job('interval', minutes=INTERVAL, next_run_time=datetime.datetime.now())
 def timed_job():
-	run(dry_run=True)
+	run()
 
 if __name__ == '__main__':
 	logging.basicConfig(level=logging.DEBUG)
