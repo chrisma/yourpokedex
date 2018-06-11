@@ -14842,12 +14842,14 @@ class Pokedex:
 
     @classmethod
     def entry(cls, name, lang='en'):
-        match = next((p for p in cls.pokemons if name.lower() == p.get('names').get(lang, '').lower()), None)
+        match = next((p for p in cls.pokemons if name.lower() == p['names'][lang].lower()), None)
         if match is not None:
-            match['flavor_texts'] = match['flavor_texts'][lang]
-            match['genus'] = match['genus'][lang]
-            match['names'] = match['names'][lang]
-        return match
+            out = dict()
+            out['flavor_texts'] = match['flavor_texts'][lang]
+            out['genus'] = match['genus'][lang]
+            out['names'] = match['names'][lang]
+            out['id'] = match['id']
+        return out
 
     @classmethod
     def all_names(cls, lang='en', random_order=False):

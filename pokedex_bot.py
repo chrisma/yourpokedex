@@ -134,11 +134,10 @@ def run(manual_info=None, dry_run=False):
 
 
 if __name__ == '__main__':
-	logging.basicConfig(level=logging.DEBUG)
 	logging.getLogger('requests').setLevel(logging.WARN)
 	logging.getLogger('requests_oauthlib').setLevel(logging.WARN)
 	logging.getLogger('oauthlib').setLevel(logging.WARN)
-	
+	log.basicConfig(level=logging.DEBUG)
 	log.debug('Started!')
 
 	parser = argparse.ArgumentParser(description='Twitter bot that replies with Pokemon info to users who mention Pokemon.')
